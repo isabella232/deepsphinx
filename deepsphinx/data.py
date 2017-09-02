@@ -1,17 +1,18 @@
-"""Data utilities"""
+'''Data utilities'''
 import threading
 import random
 import numpy as np
 from python_speech_features.base import fbank, delta
 import tensorflow as tf
 from deepsphinx.vocab import VOCAB_TO_INT
-from deepsphinx.utils import FileOpen, FLAGS
+from deepsphinx.utils import FLAGS
 from deepsphinx.fst import in_fst
 import soundfile as sf
+import csv
 
 def get_features(audio_file):
-    """Get features from a file"""
-    signal, sample_rate = sf.read(audio_file)
+    '''Get features from a file'''
+    signal, sample_rate = sf.read(tf.gfile.FastGFile(audio_file, 'rb'))
     feat, energy = fbank(signal, sample_rate, nfilt=FLAGS.nfilt)
     feat = np.log(feat)
     dfeat = delta(feat, 2)
@@ -20,15 +21,13 @@ def get_features(audio_file):
                           axis=1)
 
 def get_speaker_stats(set_ids):
-    """Get mean and variance of a speaker"""
-    tf.logging.info("Getting speaker stats")
-    trans = FileOpen(FLAGS.trans_file).readlines()
+    '''Get mean and variance of a speaker'''
+    tf.logging.info('Getting speaker stats')
+    trans = tf.gfile.FastGFile(FLAGS.trans_file).readlines()
     sum_speaker = {}
     sum_sq_speaker = {}
     count_speaker = {}
-    for line in trans:
-        line = line.strip()
-        _, set_id, speaker, audio_file = line.split('\\')
+    for _, set_id, speaker, audio_file in csv.reader(trans):
         if set_id in set_ids:
             n_feat = 3 * FLAGS.nfilt + 1
             if speaker not in sum_speaker:
@@ -52,7 +51,7 @@ def read_data_queue(
         mean_speaker,
         var_speaker,
         fst):
-    """Start a thread to add data in a queue"""
+    '''Start a thread to add data in a queue'''
     input_data = tf.placeholder(dtype=tf.float32, shape=[None, FLAGS.nfilt * 3 + 1])
     input_length = tf.placeholder(dtype=tf.int32, shape=[])
     output_data = tf.placeholder(dtype=tf.int32, shape=[None])
@@ -91,13 +90,11 @@ def read_data_thread(
         mean_speaker,
         var_speaker,
         fst):
-    """Enqueue data to queue"""
+    '''Enqueue data to queue'''
 
-    trans = FileOpen(FLAGS.trans_file).readlines()
+    trans = tf.gfile.FastGFile(FLAGS.trans_file).readlines()
     random.shuffle(trans)
-    for line in trans:
-        line = line.strip()
-        text, set_id_trans, speaker, audio_file = line.split('\\')
+    for text, set_id_trans, speaker, audio_file in csv.reader(trans):
         try:
             text = [VOCAB_TO_INT[c]
                     for c in list(text)] + [VOCAB_TO_INT['</s>']]
